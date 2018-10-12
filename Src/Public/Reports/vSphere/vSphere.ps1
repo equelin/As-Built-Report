@@ -411,6 +411,7 @@ function Get-ScsiDeviceDetail {
     }
 }
 
+<<<<<<< HEAD
 Function Get-PciDeviceDetail {
     <#
     .SYNOPSIS
@@ -509,6 +510,43 @@ Function Get-PciDeviceDetail {
 
     End{}
     
+=======
+Function Get-VsanPerformanceService {
+    <#
+        .SYNOPSIS
+        Helper function to return vSAN performance service configuration.
+        .PARAMETER Server
+        vCenter VISession object.
+        .PARAMETER Cluster
+        This parameter specifies the name of the vSAN cluster.
+        .EXAMPLE
+        $VsanPerformanceService = Get-VsanPerformanceService -Server $vCenter -Cluster 'vSAN'
+        .NOTES
+        Author: Erwan Quélin
+    #>
+
+    [CmdLetBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        $Server,
+        [Parameter(Mandatory = $true)]
+        [String]$Cluster
+    )
+
+    $vchs = Get-VsanView -Id "VsanPerformanceManager-vsan-performance-manager" -Server $Server
+    $cluster_view = (Get-Cluster -Name $Cluster -Server $Server).ExtensionData.MoRef
+    $PerfStatsObject = $vchs.VsanPerfQueryStatsObjectInformation($cluster_view)
+
+    $SpbmStoragePolicy = Get-SpbmStoragePolicy -Server $Server | Where-Object { $_.Id -eq $PerfStatsObject.SpbmProfileUuid}
+
+    [PSCustomObject]@{
+        'Stats object health'           = $PerfStatsObject.VsanHealth
+        'Stats object UUID'             = $PerfStatsObject.SpbmProfileUuid
+        'Stats object storage policy'   = $SpbmStoragePolicy.Name
+        'Compliance status'             = $PerfStatsObject.SpbmComplianceResult.ComplianceStatus
+    } 
+
+>>>>>>> Add detailed informations about vSAN Performance service
 }
 #endregion Script Functions
 
@@ -1517,7 +1555,7 @@ foreach ($VIServer in $Target) {
                     #region vSAN Cluster Condensed Information
                     if ($InfoLevel.Vsan -eq 2) {
                         $VsanClusterSummary = $VsanClusters | Select-Object Name, @{L = 'vSAN Enabled'; E = {$_.VsanEnabled}}, @{L = 'Stretched Cluster Enabled'; E = {$_.StretchedClusterEnabled}},
-                        @{L = 'Space Efficiency Enabled'; E = {$_.SpaceEfficiencyEnabled}}, @{L = 'Encryption Enabled'; E = {$_.EncryptionEnabled}}, @{L = 'Health Check Enabled'; E = {$_.HealthCheckEnabled}}
+                        @{L = 'Space Efficiency Enabled'; E = {$_.SpaceEfficiencyEnabled}}, @{L = 'Encryption Enabled'; E = {$_.EncryptionEnabled}}, @{L = 'Health Check Enabled'; E = {$_.HealthCheckEnabled}}, @{L = 'Performance Service Enabled'; E = {$_.PerformanceServiceEnabled}}
                         $VsanClusterSummary | Table -Name 'vSAN Cluster Summary'
                     }
                     #endregion vSAN Cluster Condensed Information
@@ -1527,9 +1565,9 @@ foreach ($VIServer in $Target) {
                         foreach ($VsanCluster in $VsanClusters) {
                             $VsanClusterName = $VsanCluster.Name
                             Section -Style Heading3 $VsanClusterName {
-                                $VsanDiskGroup = Get-VsanDiskGroup -Cluster $VsanClusterName
+                                $VsanDiskGroup = Get-VsanDiskGroup -Server $vCenter -Cluster $VsanClusterName
                                 $NumVsanDiskGroup = $VsanDiskGroup.Count
-                                $VsanDisk = Get-vSanDisk -VsanDiskGroup $VsanDiskGroup
+                                $VsanDisk = Get-vSanDisk -Server $vCenter -VsanDiskGroup $VsanDiskGroup
                                 $VsanDiskFormat = $VsanDisk.DiskFormatVersion | Select-Object -First 1 -Unique
                                 $NumVsanDisk = ($VsanDisk | Where-Object {$_.IsSsd -eq $true}).Count
                                 if ($VsanDisk.IsSsd -eq $true -and $VsanDisk.IsCacheDisk -eq $false) {
@@ -1551,16 +1589,24 @@ foreach ($VIServer in $Target) {
                                     'SpaceEfficiencyEnabled' = $VsanCluster.SpaceEfficiencyEnabled
                                     'EncryptionEnabled' = $VsanCluster.EncryptionEnabled
                                     'HealthCheckEnabled' = $VsanCluster.HealthCheckEnabled
+                                    'PerformanceServiceEnabled' = $VsanCluster.PerformanceServiceEnabled
                                     'TimeOfHclUpdate' = $VsanCluster.TimeOfHclUpdate
                                 }
                                 $VsanClusterSpecs = $VsanHashTable | Select-Object Name, Id, @{L = 'Type'; E = {$_.VsanClusterType}}, Version, @{L = 'Number of Hosts'; E = {$_.HostCount}}, @{L = 'Stretched Cluster'; E = {$_.StretchedClusterEnabled}}, @{L = 'Disk Format Version'; E = {$_.DiskFormat}}, 
                                 @{L = 'Total Number of Disks'; E = {$_.NumVsanDisk}}, @{L = 'Total Number of Disk Groups'; E = {$_.NumVsanDiskGroup}}, @{L = 'Disk Claim Mode'; E = {$_.VsanDiskClaimMode}}, @{L = 'Deduplication and Compression'; E = {$_.SpaceEfficiencyEnabled}}, 
-                                @{L = 'Encryption Enabled'; E = {$_.EncryptionEnabled}}, @{L = 'Health Check Enabled'; E = {$_.HealthCheckEnabled}}, @{L = 'HCL Last Updated'; E = {$_.TimeOfHclUpdate}}
+                                @{L = 'Encryption Enabled'; E = {$_.EncryptionEnabled}}, @{L = 'Health Check Enabled'; E = {$_.HealthCheckEnabled}}, @{L = 'Performance Service Enabled'; E = {$_.PerformanceServiceEnabled}}, @{L = 'HCL Last Updated'; E = {$_.TimeOfHclUpdate}}
                                 # Set InfoLevel to 4 or above to provide information for associated VMHosts
                                 if ($InfoLevel.Vsan -ge 4) {
                                     Add-Member -InputObject $VsanClusterSpecs -MemberType NoteProperty -Name 'Hosts' -Value (($VsanDiskGroup.VMHost | Sort-Object VMHost) -join ", ")
                                 }
                                 $VsanClusterSpecs | Table -Name "$VsanClusterName vSAN Configuration" -List -ColumnWidths 50, 50
+
+                                # Get detailed informations about Performance Service
+                                If ($VsanCluster.PerformanceServiceEnabled) {
+                                    Section -Style Heading4 'Performance Service' {
+                                        Get-VsanPerformanceService -Server $vCenter -Cluster $VsanClusterName | Table -Name "$VsanClusterName Performance Service" -List -ColumnWidths 50, 50
+                                    }
+                                }
                             }  
                         }
                         #endregion vSAN Cluster Detailed Information
