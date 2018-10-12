@@ -411,7 +411,6 @@ function Get-ScsiDeviceDetail {
     }
 }
 
-<<<<<<< HEAD
 Function Get-PciDeviceDetail {
     <#
     .SYNOPSIS
@@ -510,7 +509,6 @@ Function Get-PciDeviceDetail {
 
     End{}
     
-=======
 Function Get-VsanPerformanceService {
     <#
         .SYNOPSIS
@@ -546,7 +544,6 @@ Function Get-VsanPerformanceService {
         'Compliance status'             = $PerfStatsObject.SpbmComplianceResult.ComplianceStatus
     } 
 
->>>>>>> Add detailed informations about vSAN Performance service
 }
 #endregion Script Functions
 
